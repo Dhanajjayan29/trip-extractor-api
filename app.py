@@ -1,39 +1,21 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import requests
-import json
+import os
 
 app = FastAPI()
 
-# Change this to your Ollama server URL
-# On Render, you cannot access localhost:11434 (unless Ollama runs inside same service).
-# For now, keep local testing:
-OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
+# Replace with actual Ollama/Router API endpoint
+OLLAMA_URL = "https://api.openrouter.ai/v1/chat/completions"
+API_KEY = os.getenv("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")  # Set in Render Dashboard
 
-
-# ---------------------------
-# Root route (health check)
-# ---------------------------
-@app.get("/")
-async def root():
-    return {"message": "🚀 Trip Extractor API with Ollama is running"}
-
-
-# ---------------------------
-# Request model
-# ---------------------------
 class QueryInput(BaseModel):
     query: str
 
-
-# ---------------------------
-# /extract route
-# ---------------------------
 @app.post("/extract")
 async def extract_travel_details(data: QueryInput):
     inp = data.query
 
-    # Prompt for Ollama
     prompt = f"""
     Extract travel details from the following user query.
 
@@ -57,35 +39,29 @@ async def extract_travel_details(data: QueryInput):
     """
 
     payload = {
-        "model": "mistral:latest",
-        "prompt": prompt,
-        "stream": False
+        "model": "mistral:latest",  # change if needed
+        "messages": [
+            {"role": "system", "content": "You are a JSON extractor."},
+            {"role": "user", "content": prompt}
+        ]
     }
 
     try:
-        response = requests.post(OLLAMA_URL, json=payload, timeout=60)
+        response = requests.post(
+            OLLAMA_URL,
+            headers={
+                "Authorization": f"Bearer {API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json=payload
+        )
 
         if response.status_code == 200:
             data = response.json()
-            raw_answer = data.get("response", "").strip()
-
-            # Try to extract clean JSON
-            try:
-                # Sometimes Ollama returns extra text → try json.loads
-                extracted = json.loads(raw_answer)
-            except json.JSONDecodeError:
-                # Try to extract JSON substring
-                try:
-                    start = raw_answer.find("{")
-                    end = raw_answer.rfind("}") + 1
-                    extracted = json.loads(raw_answer[start:end])
-                except Exception:
-                    extracted = {"error": "Invalid JSON from Ollama", "raw": raw_answer}
-
-            return {"query": inp, "extracted": extracted}
-
+            answer = data["choices"][0]["message"]["content"].strip()
+            return {"query": inp, "extracted": answer}
         else:
-            return {"error": f"Ollama Error {response.status_code}", "details": response.text}
+            return {"error": f"Ollama API Error {response.status_code}", "details": response.text}
 
     except Exception as e:
-        return {"error": "Could not connect to Ollama server", "details": str(e)}
+        return {"error": "Could not connect to Ollama API", "details": str(e)}
