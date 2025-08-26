@@ -5,15 +5,18 @@ import os
 
 app = FastAPI()
 
-# Use Groq (Ollama-compatible API)
+# Groq endpoint (Ollama-compatible)
 OLLAMA_URL = "https://api.groq.com/openai/v1/chat/completions"
-API_KEY = "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"  # set in Render env vars
+API_KEY = os.getenv("OLLAMA_API_KEY")
 
 class QueryInput(BaseModel):
     query: str
 
 @app.post("/extract")
 async def extract_travel_details(data: QueryInput):
+    if not API_KEY:
+        return {"error": "❌ Missing API Key. Set OLLAMA_API_KEY in Render environment variables."}
+
     inp = data.query
 
     prompt = f"""
@@ -44,7 +47,7 @@ async def extract_travel_details(data: QueryInput):
     }
 
     payload = {
-        "model": "llama3-8b-8192",  # Groq model
+        "model": "llama3-8b-8192",
         "messages": [
             {"role": "system", "content": "You are a strict JSON travel details extractor."},
             {"role": "user", "content": prompt}
@@ -54,11 +57,17 @@ async def extract_travel_details(data: QueryInput):
 
     try:
         response = requests.post(OLLAMA_URL, headers=headers, json=payload)
+
         if response.status_code == 200:
             data = response.json()
-            answer = data["choices"][0]["message"]["content"]
+            # Safe parsing
+            try:
+                answer = data["choices"][0]["message"]["content"].strip()
+            except Exception:
+                answer = data
             return {"query": inp, "extracted": answer}
-        else:
-            return {"error": f"❌ API Error {response.status_code}", "details": response.text}
+
+        return {"error": f"❌ API Error {response.status_code}", "details": response.text}
+
     except Exception as e:
         return {"error": "❌ Could not connect to Groq API", "details": str(e)}
