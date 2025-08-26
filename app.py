@@ -39,7 +39,7 @@ async def extract_travel_details(data: QueryInput):
     payload = {
         "model": "llama3-8b-8192",
         "messages": [
-            {"role": "system", "content": "You are a strict JSON extractor. Always return only {\"from\":..., \"to\":...}."},
+            {"role": "system", "content": "You are a strict JSON extractor. Always return only {\"from\":..., \"to\":..., \"mode\":..., \"time\":..., \"emotion\":..., \"miles\":..., \"rating\":..., \"via\":..., \"inbetween\":...}."},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.0
