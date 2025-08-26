@@ -6,7 +6,7 @@ import os
 app = FastAPI()
 
 # Replace with actual Ollama/Router API endpoint
-OLLAMA_URL = "https://api.openrouter.ai/v1/chat/completions"
+OLLAMA_URL = "https://api.groq.com/openai/v1/chat/completions"
 API_KEY = os.getenv("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")  # Set in Render Dashboard
 
 class QueryInput(BaseModel):
