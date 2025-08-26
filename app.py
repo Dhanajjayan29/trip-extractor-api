@@ -6,9 +6,9 @@ import json
 
 app = FastAPI()
 
-# Groq endpoint
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-API_KEY = os.getenv("OLLAMA_API_KEY")  # Set in Render environment variables
+# Groq endpoint (Ollama-compatible)
+OLLAMA_URL = "https://api.groq.com/openai/v1/chat/completions"
+API_KEY = os.getenv("OLLAMA_API_KEY")
 
 class QueryInput(BaseModel):
     query: str
@@ -21,17 +21,18 @@ async def extract_travel_details(data: QueryInput):
     inp = data.query
 
     prompt = f"""
-    Extract structured travel details from the following query.
-    
+    Extract travel details from the following user query.
+
     Rules:
-    - Output valid JSON only.
-    - Always include all fields: from, to, mode, time, emotion, miles, rating, via, inbetween.
-    - If a field is not explicitly present, set it to "" (empty string), except "inbetween" which should be [].
-    - Do not assume or guess values. Only extract what's mentioned.
-    - Example output:
-      {{
-        "from": "Toronto",
-        "to": "Montreal",
+    - Output only valid JSON (no extra text).
+    - Fields must always exist: from, to, mode, time, emotion, miles, rating, via, inbetween.
+    - If a field is **not explicitly mentioned** in the query, set it to "" (or [] for inbetween).
+    - Do NOT infer or guess values.
+    - Example:
+      Query: "How far is Edmonton from Jasper by car"
+      Output: {{
+        "from": "Edmonton",
+        "to": "Jasper",
         "mode": "car",
         "time": "",
         "emotion": "",
@@ -52,36 +53,24 @@ async def extract_travel_details(data: QueryInput):
     payload = {
         "model": "llama3-8b-8192",
         "messages": [
-            {
-                "role": "system",
-                "content": "You are a strict JSON extractor. Always return {from,to,mode,time,emotion,miles,rating,via,inbetween}. Never add defaults or guess. Missing fields must be empty."
-            },
+            {"role": "system", "content": "You are a strict JSON travel details extractor."},
             {"role": "user", "content": prompt}
         ],
-        "temperature": 0.0
+        "temperature": 0
     }
 
     try:
-        response = requests.post(GROQ_URL, headers=headers, json=payload)
+        response = requests.post(OLLAMA_URL, headers=headers, json=payload)
 
         if response.status_code == 200:
             data = response.json()
             try:
                 answer = data["choices"][0]["message"]["content"].strip()
-                parsed = json.loads(answer)  # Ensure valid JSON
-            except Exception:
-                parsed = {
-                    "from": "",
-                    "to": "",
-                    "mode": "",
-                    "time": "",
-                    "emotion": "",
-                    "miles": "",
-                    "rating": "",
-                    "via": "",
-                    "inbetween": []
-                }
-            return {"query": inp, "extracted": parsed}
+                extracted = json.loads(answer)  # enforce JSON validity
+            except Exception as e:
+                return {"error": "❌ Failed to parse model output", "details": str(e), "raw": data}
+
+            return {"query": inp, "extracted": extracted}
 
         return {"error": f"❌ API Error {response.status_code}", "details": response.text}
 
