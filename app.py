@@ -21,12 +21,25 @@ async def extract_travel_details(data: QueryInput):
     inp = data.query
 
     prompt = f"""
-    Extract only 'from' and 'to' locations from the following query.
+    Extract structured travel details from the following query.
     
     Rules:
     - Output valid JSON only.
-    - Fields required: from, to.
-    - If a location is not found, set it as "".
+    - Always include all fields: from, to, mode, time, emotion, miles, rating, via, inbetween.
+    - If a field is not explicitly present, set it to "" (empty string), except "inbetween" which should be [].
+    - Do not assume or guess values. Only extract what's mentioned.
+    - Example output:
+      {{
+        "from": "Toronto",
+        "to": "Montreal",
+        "mode": "car",
+        "time": "",
+        "emotion": "",
+        "miles": "",
+        "rating": "",
+        "via": "",
+        "inbetween": []
+      }}
 
     Query: {inp}
     """
@@ -39,7 +52,10 @@ async def extract_travel_details(data: QueryInput):
     payload = {
         "model": "llama3-8b-8192",
         "messages": [
-            {"role": "system", "content": "You are a strict JSON extractor. Always return only {\"from\":..., \"to\":..., \"mode\":..., \"time\":..., \"emotion\":..., \"miles\":..., \"rating\":..., \"via\":..., \"inbetween\":...}."},
+            {
+                "role": "system",
+                "content": "You are a strict JSON extractor. Always return {from,to,mode,time,emotion,miles,rating,via,inbetween}. Never add defaults or guess. Missing fields must be empty."
+            },
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.0
@@ -54,7 +70,17 @@ async def extract_travel_details(data: QueryInput):
                 answer = data["choices"][0]["message"]["content"].strip()
                 parsed = json.loads(answer)  # Ensure valid JSON
             except Exception:
-                parsed = {"from": "", "to": ""}
+                parsed = {
+                    "from": "",
+                    "to": "",
+                    "mode": "",
+                    "time": "",
+                    "emotion": "",
+                    "miles": "",
+                    "rating": "",
+                    "via": "",
+                    "inbetween": []
+                }
             return {"query": inp, "extracted": parsed}
 
         return {"error": f"❌ API Error {response.status_code}", "details": response.text}
