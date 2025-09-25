@@ -495,7 +495,7 @@ async def root():
 async def get_available_interests():
     return {"interests": AVAILABLE_INTERESTS}
 
-@app.post("/plan-trip", response_model=TripResponse)
+@app.post("/plan_trip", response_model=TripResponse)
 async def plan_trip(trip_request: TripRequest):
     """Plan a trip using form-based input."""
     try:
